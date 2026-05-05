@@ -23,7 +23,9 @@ A cloud-based platform for analyzing household electricity consumption patterns,
 
 Five microservices and three databases on Azure PaaS. The Client UI is the only public-facing service — all backend services and databases are VNet-private.
 
-![System Architecture](./diagrams/system-architecture.png)
+<p align="center">
+  <img src="./diagrams/system-architecture.png" width="90%" />
+</p>
 
 ---
 
@@ -31,13 +33,17 @@ Five microservices and three databases on Azure PaaS. The Client UI is the only 
 
 The VNet (`smartgrid-vnet`, `10.0.0.0/16`) is split into an app-subnet for App Service VNet integration and a db-private-subnet for private endpoints to each Azure SQL database. Only the Client UI has a public inbound endpoint.
 
-![Network Topology](./diagrams/Network-Topology.png)
+<p align="center">
+  <img src="./diagrams/Network-Topology.png" width="90%" />
+</p>
 
 ---
 
 ## End-to-End Data Flow
 
-![End-to-End Sequence](./diagrams/data-flow-sequence.png)
+<p align="center">
+  <img src="./diagrams/data-flow-sequence.png" width="90%" />
+</p>
 
 1. **Register a meter** — Client UI → `POST /meters` → Meter Registration Service → Meter Registration DB
 2. **Trigger simulation** — Client UI → `POST /simulate/{meter_id}` → Data Collection Service
@@ -67,7 +73,7 @@ Every service deploys automatically to Azure App Service via **GitHub Actions**,
 | Meter Registration | ![CI](https://github.com/LouayYa/meter-registration-service/actions/workflows/main_meter-registration-service.yml/badge.svg) |
 | Data Collection | ![CI](https://github.com/LouayYa/smartgrid-data-collection/actions/workflows/main_smartgrid-data-collection.yml/badge.svg) |
 | Data Analysis | ![CI](https://github.com/LouayYa/smartgrid-data-analysis/actions/workflows/main_smartgrid-data-analysis.yml/badge.svg) |
-| Client Interface | ![CI](https://github.com/LouayYa/smartgrid-ui/actions/workflows/main_smartgrid-UI.yml/badge.svg) |
+| Client Interface | ![CI](https://github.com/LouayYa/smartgrid-ui/actions/workflows/main_smartgrid-ui.yml/badge.svg) |
 
 ---
 
