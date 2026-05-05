@@ -34,7 +34,7 @@ Five microservices and three databases on Azure PaaS. The Client UI is the only 
 The VNet (`smartgrid-vnet`, `10.0.0.0/16`) is split into an app-subnet for App Service VNet integration and a db-private-subnet for private endpoints to each Azure SQL database. Only the Client UI has a public inbound endpoint.
 
 <p align="center">
-  <img src="./diagrams/Network-Topology.png" width="90%" />
+  <img src="./diagrams/Network-Topology.jpg" width="90%" />
 </p>
 
 ---
@@ -42,7 +42,7 @@ The VNet (`smartgrid-vnet`, `10.0.0.0/16`) is split into an app-subnet for App S
 ## End-to-End Data Flow
 
 <p align="center">
-  <img src="./diagrams/data-flow-sequence.png" width="90%" />
+  <img src="./diagrams/data-flow-sequence.jpg" width="90%" />
 </p>
 
 1. **Register a meter** — Client UI → `POST /meters` → Meter Registration Service → Meter Registration DB
