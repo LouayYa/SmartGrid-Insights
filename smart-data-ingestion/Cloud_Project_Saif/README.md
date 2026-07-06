@@ -8,7 +8,7 @@ One of five independently deployed microservices behind SmartGrid Insights, a sy
 
 Originally deployed on Azure App Service against Azure SQL via `pyodbc`; the database layer has since been migrated to **PostgreSQL**, and the service carries a **pytest** suite covering its API surface (CRUD on consumption records, CSV loading, validation) against an isolated SQLite test database — no live infrastructure required to run tests locally or in CI.
 
-**Stack:** FastAPI · SQLAlchemy · pandas · PostgreSQL (psycopg2) · Pydantic · pytest · GitHub Actions · Azure App Service (deploy-on-demand)
+**Stack:** FastAPI · SQLAlchemy · pandas · PostgreSQL (psycopg2) · Pydantic · pytest · Docker · GitHub Actions · Azure App Service (deploy-on-demand)
 
 ---
 
@@ -28,12 +28,13 @@ Data Collection Service  ◄── GET /api/v1/consumption  (date-range filtered
 
 ## API Endpoints
 
-Base URL: `http://localhost:8003` (local dev — the Azure deployment has been decommissioned; see [CI/CD](#cicd))
+Base URL: `http://localhost:8001` (local dev — the Azure deployment has been decommissioned; see [CI/CD](#cicd))
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/v1/load` | Bulk-load the household power consumption CSV into the database (idempotent — clears existing rows first) |
 | `GET` | `/api/v1/consumption` | List consumption records — optional `start_date`/`end_date` (`d/m/yy` or `d/m/yyyy`), `limit`, `offset` |
+| `GET` | `/api/v1/consumption/{id}` | Get a single consumption record by ID |
 | `POST` | `/api/v1/consumption` | Create a single consumption record |
 | `PUT` | `/api/v1/consumption/{id}` | Partially update a consumption record |
 | `DELETE` | `/api/v1/consumption/{id}` | Delete a consumption record |
@@ -91,8 +92,6 @@ pytest tests/ -v
 
 This suite runs automatically as part of CI (see below) on every push to `main`.
 
-> Note: `GET /api/v1/consumption/{id}` is currently a stub — it returns a placeholder record rather than the real one — and is intentionally left untested pending implementation.
-
 ---
 
 ## Local Setup
@@ -108,12 +107,26 @@ Create a `.env` file:
 ```env
 DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<db>
 ```
+Without `DATABASE_URL`, the service falls back to a local SQLite file — handy for a quick look without Postgres.
 
 Run:
 ```bash
-uvicorn main:app --reload --port 8003
-# Docs: http://localhost:8003/docs
+uvicorn main:app --reload --port 8001
+# Docs: http://localhost:8001/docs
 ```
+
+---
+
+## Run with Docker
+
+The repo ships a multi-stage [`Dockerfile`](Dockerfile) (Python 3.12-slim builder + slim runtime, non-root user, uvicorn):
+
+```bash
+docker build -t smartgrid-data-ingestion .
+docker run -p 8001:8001 --env-file .env smartgrid-data-ingestion
+```
+
+The dataset CSV is baked into the image, so `POST /api/v1/load` works out of the box. To run the **entire five-service stack plus a shared PostgreSQL 16 instance** with one command, use the `docker-compose.yml` in the umbrella repo: [SmartGrid-Insights](https://github.com/LouayYa/SmartGrid-Insights).
 
 ---
 

@@ -8,7 +8,7 @@ One of five independently deployed microservices behind SmartGrid Insights, a sy
 
 Originally deployed on Azure App Service against Azure SQL via `pyodbc`; the database layer has since been migrated to **PostgreSQL**, and the service carries a **pytest** suite covering its API surface (CRUD on meters, duplicate-name conflicts, validation) against an isolated SQLite test database — no live infrastructure required to run tests locally or in CI.
 
-**Stack:** Flask · Flask-SQLAlchemy · PostgreSQL (psycopg2) · Gunicorn · pytest · GitHub Actions · Azure App Service (deploy-on-demand)
+**Stack:** Flask · Flask-SQLAlchemy · PostgreSQL (psycopg2) · Gunicorn · pytest · Docker · GitHub Actions · Azure App Service (deploy-on-demand)
 
 ---
 
@@ -43,7 +43,7 @@ POST /meters
 { "name": "Household 1" }
 ```
 ```json
-{ "meter_id": 1, "name": "Household 1", "created_at": "2026-01-01T00:00:00" }
+{ "meter_id": 1, "name": "Household 1", "created_at": "2026-01-01T00:00:00+00:00" }
 ```
 
 ---
@@ -101,6 +101,19 @@ python app.py
 # or, matching the production startup command:
 gunicorn --bind=0.0.0.0:8000 app:app
 ```
+
+---
+
+## Run with Docker
+
+The repo ships a multi-stage [`Dockerfile`](Dockerfile) (Python 3.12-slim builder + slim runtime, non-root user, Gunicorn):
+
+```bash
+docker build -t meter-registration-service .
+docker run -p 8000:8000 --env-file .env meter-registration-service
+```
+
+To run the **entire five-service stack plus a shared PostgreSQL 16 instance** with one command, use the `docker-compose.yml` in the umbrella repo: [SmartGrid-Insights](https://github.com/LouayYa/SmartGrid-Insights).
 
 ---
 

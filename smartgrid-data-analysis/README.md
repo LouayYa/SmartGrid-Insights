@@ -4,9 +4,9 @@
 
 ## Overview
 
-Provides analytical insights over collected smart meter consumption data. This service has no database of its own — it fetches readings from the Data Collection Service via REST and computes results on the fly. Deployed as an Azure App Service. Carries a **pytest** suite covering its API surface, with the outbound call to the Data Collection Service mocked — no live infrastructure required to run tests locally or in CI.
+Provides analytical insights over collected smart meter consumption data. This service has no database of its own — it fetches readings from the Data Collection Service via REST and computes results on the fly. Originally deployed on Azure App Service (since decommissioned — the stack now runs locally via Docker Compose). Carries a **pytest** suite covering its API surface, with the outbound call to the Data Collection Service mocked — no live infrastructure required to run tests locally or in CI.
 
-**Stack:** FastAPI · Pydantic · Requests · pytest · Azure App Service · GitHub Actions
+**Stack:** FastAPI · Pydantic · Requests · pytest · Docker · GitHub Actions · Azure App Service (deploy-on-demand)
 
 ---
 
@@ -30,7 +30,7 @@ Client Interface
 
 ## API Endpoints
 
-Base URL: `https://<data-analysis-app>.azurewebsites.net`
+Base URL: `http://localhost:8003` (local dev — the Azure deployment has been decommissioned; see [CI/CD](#cicd))
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -96,7 +96,7 @@ pip install -r requirements.txt
 
 Create a `.env` file:
 ```env
-DATA_COLLECTION_URL=https://<data-collection-app>.azurewebsites.net
+DATA_COLLECTION_URL=http://localhost:8002
 ```
 
 Run:
@@ -107,19 +107,24 @@ uvicorn app.main:app --reload --port 8003
 
 ---
 
-## CI/CD — Deployment to Azure App Service
+## Run with Docker
 
-The service is deployed to Azure App Service via **GitHub Actions**, configured through **Azure Deployment Center** — no manual workflow setup required.
+The repo ships a multi-stage [`Dockerfile`](Dockerfile) (Python 3.12-slim builder + slim runtime, non-root user, uvicorn):
 
-**How it was set up:**
-1. In the Azure Portal, navigate to the App Service → **Deployment Center**
-2. Under **Source**, select **GitHub** and authorize Azure to access your account
-3. Select the repository (`smartgrid-data-analysis`) and branch (`main`)
-4. Azure automatically generates and commits a GitHub Actions workflow file to `.github/workflows/`
+```bash
+docker build -t smartgrid-data-analysis .
+docker run -p 8003:8003 --env-file .env smartgrid-data-analysis
+```
 
-From that point on, every push to `main` triggers the workflow — it builds the Python app and deploys it to the App Service automatically.
+To run the **entire five-service stack plus a shared PostgreSQL 16 instance** with one command, use the `docker-compose.yml` in the umbrella repo: [SmartGrid-Insights](https://github.com/LouayYa/SmartGrid-Insights).
 
-The `DATA_COLLECTION_URL` environment variable is configured under **App Service → Settings → Configuration** in the Azure Portal, not committed to the repo.
+---
+
+## CI/CD
+
+**Build & test** run automatically via **GitHub Actions** on every push to `main`: dependencies install into a virtual environment and the `pytest` suite runs with the Data Collection call mocked. A failing test blocks the pipeline before any deployment step runs.
+
+**Deploy to Azure App Service** was originally wired through **Azure Deployment Center** (GitHub source → auto-generated workflow), with the `DATA_COLLECTION_URL` app setting configured under App Service → Configuration rather than committed to the repo. The live Azure App Service has since been decommissioned to cut hosting costs, so the `deploy` job is kept in [`.github/workflows/`](.github/workflows/) as a reference implementation and only runs on a manual `workflow_dispatch` trigger — it no longer fires on every push.
 
 ---
 
