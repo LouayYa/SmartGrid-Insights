@@ -9,7 +9,7 @@ import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 
-from app.schemas import DailyAverage, PeakHourResponse, CategoryBreakdown
+from app.schemas import CategoryBreakdown, DailyAggregate, DailyAverage, PeakHourResponse
 
 load_dotenv()
 
@@ -106,6 +106,34 @@ def get_peak_hour(
     avg = hourly_sums[peak_hour]["total"] / hourly_sums[peak_hour]["count"]
 
     return PeakHourResponse(peak_hour=peak_hour, avg_power=round(avg, 4))
+
+
+@app.get("/analysis/daily/{meter_id}", response_model=List[DailyAggregate])
+def get_precomputed_daily(
+    meter_id: int,
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+):
+    """Serve the Airflow-precomputed daily aggregates.
+
+    Unlike the on-demand endpoints above (which pull raw readings and
+    aggregate per request), this reads the analytics_daily table that the
+    daily batch pipeline maintains — constant-time regardless of range size.
+    """
+    params = {"meter_id": meter_id, "start_date": start_date, "end_date": end_date}
+    try:
+        resp = requests.get(f"{DATA_COLLECTION_URL}/aggregates/daily", params=params, timeout=30)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Data Collection Service unreachable: {exc}")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch aggregates from Data Collection Service")
+    rows = resp.json()
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="No precomputed aggregates for the given meter and range — has the daily_consumption_aggregates DAG run?",
+        )
+    return rows
 
 
 @app.get("/analysis/categories/{meter_id}", response_model=CategoryBreakdown)

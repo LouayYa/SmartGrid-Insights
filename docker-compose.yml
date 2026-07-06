@@ -12,6 +12,26 @@
 # http://collection:8002) on the private "smartgrid" network — the localhost
 # URLs baked into the code are overridden here via environment variables.
 
+# Shared config for the Airflow services (LocalExecutor, metadata DB on the
+# shared Postgres, DAGs mounted from ./airflow/dags).
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.10.5-python3.12
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/airflow"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__WEBSERVER__SECRET_KEY: "${AIRFLOW_SECRET_KEY:-smartgrid-airflow-secret}"
+    # Connections/URLs the DAGs use.
+    AIRFLOW_CONN_COLLECTION_DB: "postgres://postgres:${POSTGRES_PASSWORD}@db:5432/smartgrid_collection"
+    INGESTION_API_URL: "http://ingestion:8001"
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags:ro
+    - ./airflow/tests:/opt/airflow/tests:ro
+    - airflow-logs:/opt/airflow/logs
+  networks:
+    - smartgrid
+
 services:
   # ---------------------------------------------------------------- database
   db:
@@ -176,8 +196,52 @@ services:
     networks:
       - smartgrid
 
+  # ------------------------------------------------------------- airflow
+  # One-shot: migrates the Airflow metadata DB and creates the admin user.
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: "${AIRFLOW_ADMIN_USER:-admin}"
+      _AIRFLOW_WWW_USER_PASSWORD: "${AIRFLOW_ADMIN_PASSWORD:-admin}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Airflow UI at http://localhost:8080 (login: admin / $AIRFLOW_ADMIN_PASSWORD)
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  airflow-logs:
 
 networks:
   smartgrid:

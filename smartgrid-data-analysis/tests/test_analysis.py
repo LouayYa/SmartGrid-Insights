@@ -93,6 +93,48 @@ def test_missing_query_params_returns_422(client):
     assert response.status_code == 422
 
 
+AGGREGATE_ROW = {
+    "meter_id": 1,
+    "day": "2007-01-01",
+    "avg_power": 1.5,
+    "peak_power": 3.2,
+    "kitchen_wh": 10.0,
+    "laundry_wh": 5.0,
+    "water_heater_ac_wh": 20.0,
+    "samples": 1440,
+    "computed_at": "2026-07-06T02:00:00",
+}
+
+
+def test_precomputed_daily_passthrough(client, mock_readings):
+    mock_readings(json_data=[AGGREGATE_ROW])
+
+    response = client.get(
+        "/analysis/daily/1",
+        params={"start_date": "2007-01-01", "end_date": "2007-01-02"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["day"] == "2007-01-01"
+    assert data[0]["avg_power"] == 1.5
+    # computed_at is internal to the batch table; the schema strips it.
+    assert "computed_at" not in data[0]
+
+
+def test_precomputed_daily_404_when_dag_has_not_run(client, mock_readings):
+    mock_readings(json_data=[])
+
+    response = client.get(
+        "/analysis/daily/1",
+        params={"start_date": "2007-01-01", "end_date": "2007-01-02"},
+    )
+
+    assert response.status_code == 404
+    assert "DAG" in response.json()["detail"]
+
+
 def test_collection_unreachable_returns_502(client, monkeypatch):
     import requests as requests_lib
 

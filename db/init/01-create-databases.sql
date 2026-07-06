@@ -3,3 +3,5 @@
 CREATE DATABASE smartgrid_ingestion;
 CREATE DATABASE smartgrid_collection;
 CREATE DATABASE smartgrid_registration;
+-- Airflow metadata database (scheduler state, DAG runs, task history).
+CREATE DATABASE airflow;

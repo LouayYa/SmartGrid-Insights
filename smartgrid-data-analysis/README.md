@@ -37,6 +37,7 @@ Base URL: `http://localhost:8003` (local dev — the Azure deployment has been d
 | `GET` | `/analysis/averages/{meter_id}` | Daily average global active power per day |
 | `GET` | `/analysis/peaks/{meter_id}` | Peak consumption hour (0–23) |
 | `GET` | `/analysis/categories/{meter_id}` | Total energy per sub-metering category |
+| `GET` | `/analysis/daily/{meter_id}` | **Precomputed** per-meter daily aggregates from the Airflow batch pipeline (`analytics_daily` table) — constant-time regardless of range size |
 
 All endpoints require `start_date` and `end_date` as query parameters (format: `YYYY-MM-DD`).
 

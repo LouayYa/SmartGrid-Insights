@@ -26,6 +26,7 @@ This repository also contains a full snapshot of every service plus the Docker C
 ├── docker-compose.yml                  # One-command local orchestration
 ├── .env.example                        # Template for required secrets (copy to .env)
 ├── db/init/                            # Creates the per-service Postgres databases
+├── airflow/dags/                       # Batch pipelines (daily aggregates, dataset load)
 ├── smart-data-ingestion/               # Data Ingestion (FastAPI, port 8001)
 ├── smartgrid-meter-registration/       # Meter Registration (Flask, port 8000)
 ├── smartgrid-data-collection/          # Data Collection (FastAPI, port 8002)
@@ -37,7 +38,7 @@ This repository also contains a full snapshot of every service plus the Docker C
 
 ## Quick Start (Docker Compose)
 
-Run the whole platform locally — five services, a Kafka broker (KRaft, no ZooKeeper), a readings consumer worker, and a shared Postgres 16 instance — with one command.
+Run the whole platform locally — five services, a Kafka broker (KRaft, no ZooKeeper), a readings consumer worker, an Airflow batch scheduler + UI, and a shared Postgres 16 instance — with one command.
 
 ```bash
 git clone https://github.com/LouayYa/SmartGrid-Insights.git
@@ -49,7 +50,7 @@ cp .env.example .env      # then edit .env and set POSTGRES_PASSWORD
 docker compose up --build
 ```
 
-Then open the UI at **http://localhost:8004**. To seed the dataset, call `POST http://localhost:8001/api/v1/load` once, register a meter in the UI, and trigger a simulation.
+Then open the UI at **http://localhost:8004** and the **Airflow UI at http://localhost:8080** (login from `.env`). To seed the dataset, trigger the `ingest_dataset` DAG in Airflow (or call `POST http://localhost:8001/api/v1/load` directly), register a meter in the UI, and trigger a simulation.
 
 The database password is injected everywhere from the `POSTGRES_PASSWORD` variable in `.env` (which is gitignored) — nothing secret lives in `docker-compose.yml`.
 
@@ -105,6 +106,22 @@ sequenceDiagram
     K->>CW: consume batch
     CW->>DB: validated batch INSERT
     CW->>K: commit offsets (after DB commit)
+```
+
+---
+
+## Batch Analytics (Airflow)
+
+Two pipelines in [`airflow/dags/`](airflow/dags/), scheduled by an **Airflow 2.10** deployment (LocalExecutor, metadata DB on the shared Postgres):
+
+| DAG | Schedule | What it does |
+|-----|----------|--------------|
+| `daily_consumption_aggregates` | `@daily` | Reads raw readings from the Collection DB and **upserts per-meter daily aggregates** (avg/peak power, sub-metering energy totals) into `analytics_daily`. Idempotent via `ON CONFLICT` on the `(meter_id, day)` key. Served by `GET /analysis/daily/{meter_id}` — constant-time regardless of range size, vs. the on-demand endpoints that aggregate raw readings per request. |
+| `ingest_dataset` | manual | Idempotent (re)load of the UCI CSV into the ingestion DB, with retries and a row-count verification task. |
+
+DAG validity tests live in `airflow/tests/` and run inside the container:
+```bash
+docker compose exec airflow-scheduler bash -c "pip install -q pytest && python -m pytest /opt/airflow/tests -v"
 ```
 
 ---
