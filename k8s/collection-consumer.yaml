@@ -1,0 +1,42 @@
+# The single DB writer for readings: consumes the meter-readings topic.
+# Scale replicas up to the topic's partition count for parallel consumption
+# within the consumer group.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collection-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collection-consumer
+  template:
+    metadata:
+      labels:
+        app: collection-consumer
+    spec:
+      containers:
+        - name: consumer
+          image: smartgrid/collection:local
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.consumer"]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smartgrid-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://postgres:$(POSTGRES_PASSWORD)@db:5432/smartgrid_collection"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: smartgrid-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

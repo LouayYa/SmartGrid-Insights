@@ -40,6 +40,11 @@ async def log_requests(request: Request, call_next):
     return response
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 def fetch_readings(meter_id: int, start_date: str, end_date: str) -> list:
     readings = []
     offset = 0

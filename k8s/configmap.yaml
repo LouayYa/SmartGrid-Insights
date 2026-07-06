@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smartgrid-config
+data:
+  # In-cluster service DNS names (namespace-local).
+  DATA_INGESTION_URL: "http://ingestion:8001"
+  DATA_COLLECTION_URL: "http://collection:8002"
+  METER_SERVICE_URL: "http://meter:8000"
+  COLLECTION_SERVICE_URL: "http://collection:8002"
+  ANALYSIS_SERVICE_URL: "http://analysis:8003"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"

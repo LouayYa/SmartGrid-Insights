@@ -56,6 +56,21 @@ The database password is injected everywhere from the `POSTGRES_PASSWORD` variab
 
 ---
 
+## Run on Kubernetes
+
+The full platform also deploys to Kubernetes from the manifests in [`k8s/`](k8s/) — Deployments with `/health` liveness/readiness probes and resource limits, StatefulSets for Postgres and Kafka, ConfigMap/Secret separation, and startup Alembic migrations. Verified end-to-end on a local [kind](https://kind.sigs.k8s.io) cluster:
+
+```bash
+kind create cluster --name smartgrid
+sh k8s/kind-build-load.sh
+kubectl apply -k k8s/
+kubectl -n smartgrid port-forward svc/ui 8004:8004
+```
+
+[`k8s/README.md`](k8s/README.md) has the details plus the documented **GCP path** (Artifact Registry → GKE Autopilot, with Cloud SQL / Managed Kafka / Cloud Composer as the managed swap-ins).
+
+---
+
 ## System Architecture (original Azure deployment)
 
 The diagrams below document the original Azure PaaS deployment: five microservices and three databases, with the Client UI as the only public-facing service — all backend services and databases VNet-private. The same topology now runs locally on the compose network (`smartgrid`), with the three Azure SQL databases replaced by per-service databases on a shared Postgres instance.

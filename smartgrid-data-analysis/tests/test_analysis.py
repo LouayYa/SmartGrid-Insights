@@ -181,3 +181,9 @@ def test_fetch_paginates_until_short_page(client, monkeypatch):
     # All three readings (across two pages) were aggregated.
     assert response.json() == {"kitchen": 3.0, "laundry": 3.0, "water_heater_ac": 6.0}
     assert requested_offsets == [0, 2]
+
+
+def test_health(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

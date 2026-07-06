@@ -225,6 +225,11 @@ def simulate():
     return redirect(url_for("index", sim_job=job_id))
 
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/simulate/status/<job_id>")
 def simulate_status(job_id):
     job = _jobs.get(job_id)

@@ -1,0 +1,70 @@
+# The only user-facing service. On a local cluster, reach it with:
+#   kubectl -n smartgrid port-forward svc/ui 8004:8004
+# On GKE, change the Service type to LoadBalancer or put an Ingress/Gateway
+# in front of it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+spec:
+  selector:
+    app: ui
+  ports:
+    - port: 8004
+      targetPort: 8004
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ui
+  template:
+    metadata:
+      labels:
+        app: ui
+    spec:
+      containers:
+        - name: ui
+          image: smartgrid/ui:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8004
+          env:
+            - name: METER_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: smartgrid-config
+                  key: METER_SERVICE_URL
+            - name: COLLECTION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: smartgrid-config
+                  key: COLLECTION_SERVICE_URL
+            - name: ANALYSIS_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: smartgrid-config
+                  key: ANALYSIS_SERVICE_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

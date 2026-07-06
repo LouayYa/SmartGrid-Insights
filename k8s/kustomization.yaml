@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: smartgrid
+
+resources:
+  - namespace.yaml
+  - secret.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - kafka.yaml
+  - meter.yaml
+  - ingestion.yaml
+  - collection.yaml
+  - collection-consumer.yaml
+  - analysis.yaml
+  - ui.yaml
