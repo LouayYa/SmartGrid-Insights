@@ -17,6 +17,40 @@ A cloud-based platform for analyzing household electricity consumption patterns,
 | 4 | **Data Analysis** | Louy | FastAPI · Requests | [smartgrid-data-analysis](https://github.com/LouayYa/smartgrid-data-analysis) |
 | 5 | **Client Interface** | Ahmad | Flask · Jinja2 | [smartgrid-ui](https://github.com/LouayYa/smartgrid-ui) |
 
+This repository also contains a full snapshot of every service plus the Docker Compose orchestration, so the entire system can be cloned and run from one place:
+
+```
+.
+├── docker-compose.yml                  # One-command local orchestration
+├── .env.example                        # Template for required secrets (copy to .env)
+├── db/init/                            # Creates the per-service Postgres databases
+├── smart-data-ingestion/               # Data Ingestion (FastAPI, port 8001)
+├── smartgrid-meter-registration/       # Meter Registration (Flask, port 8000)
+├── smartgrid-data-collection/          # Data Collection (FastAPI, port 8002)
+├── smartgrid-data-analysis/            # Data Analysis (FastAPI, port 8003)
+└── smartgrid-UI/                       # Client Interface (Flask, port 8004)
+```
+
+---
+
+## Quick Start (Docker Compose)
+
+Run the whole platform locally — five services plus a shared Postgres 16 instance — with one command.
+
+```bash
+git clone https://github.com/LouayYa/SmartGrid-Insights.git
+cd SmartGrid-Insights
+
+# Secrets are NOT hardcoded — copy the template and set your own values.
+cp .env.example .env      # then edit .env and set POSTGRES_PASSWORD
+
+docker compose up --build
+```
+
+Then open the UI at **http://localhost:8004**. To seed the dataset, call `POST http://localhost:8001/api/v1/load` once, register a meter in the UI, and trigger a simulation.
+
+The database password is injected everywhere from the `POSTGRES_PASSWORD` variable in `.env` (which is gitignored) — nothing secret lives in `docker-compose.yml`.
+
 ---
 
 ## System Architecture

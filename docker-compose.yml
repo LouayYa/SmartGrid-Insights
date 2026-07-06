@@ -1,0 +1,121 @@
+# SmartGrid Insights — full stack orchestration.
+#
+# One image per microservice (built from each service's own Dockerfile) plus a
+# shared Postgres instance. Copy .env.example to .env and set POSTGRES_PASSWORD,
+# then bring the whole system up with:
+#
+#     docker compose up --build
+#
+# Then open the UI at http://localhost:8004
+#
+# Service-to-service calls use the compose service names as hostnames (e.g.
+# http://collection:8002) on the private "smartgrid" network — the localhost
+# URLs baked into the code are overridden here via environment variables.
+
+services:
+  # ---------------------------------------------------------------- database
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Creates the three per-service databases on first startup.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - smartgrid
+
+  # --------------------------------------------------- meter registration (8000)
+  meter:
+    build: ./smartgrid-meter-registration/meter-registration-service
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/smartgrid_registration"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - smartgrid
+
+  # ------------------------------------------------------- data ingestion (8001)
+  ingestion:
+    build: ./smart-data-ingestion/Cloud_Project_Saif
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/smartgrid_ingestion"
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - smartgrid
+
+  # ------------------------------------------------------ data collection (8002)
+  collection:
+    build: ./smartgrid-data-collection
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/smartgrid_collection"
+      DATA_INGESTION_URL: "http://ingestion:8001"
+    ports:
+      - "8002:8002"
+    depends_on:
+      db:
+        condition: service_healthy
+      ingestion:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - smartgrid
+
+  # -------------------------------------------------------- data analysis (8003)
+  analysis:
+    build: ./smartgrid-data-analysis
+    environment:
+      DATA_COLLECTION_URL: "http://collection:8002"
+    ports:
+      - "8003:8003"
+    depends_on:
+      collection:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - smartgrid
+
+  # --------------------------------------------------------------- web UI (8004)
+  ui:
+    build: ./smartgrid-UI/smart-grid-webui
+    environment:
+      METER_SERVICE_URL: "http://meter:8000"
+      COLLECTION_SERVICE_URL: "http://collection:8002"
+      ANALYSIS_SERVICE_URL: "http://analysis:8003"
+      SECRET_KEY: "${UI_SECRET_KEY:-smartgrid-client-secret}"
+    ports:
+      - "8004:8004"
+    depends_on:
+      meter:
+        condition: service_started
+      collection:
+        condition: service_started
+      analysis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - smartgrid
+
+volumes:
+  pgdata:
+
+networks:
+  smartgrid:
+    driver: bridge

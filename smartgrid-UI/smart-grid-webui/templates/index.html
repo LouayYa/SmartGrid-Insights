@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartGrid Insights Client Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">Client Interface Service</p>
+                <h1>SmartGrid Insights</h1>
+                <p class="subtitle">
+                    Register meters, simulate readings, and view consumption analytics from one dashboard.
+                </p>
+            </div>
+            <div class="date-pill">
+                Dataset range: <strong>Jan 1, 2007 – Jun 30, 2007</strong>
+            </div>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="messages">
+            {% for category, message in messages %}
+            <div class="message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% if sim_job %}
+        <div class="message sim-banner" id="sim-banner">
+            <span id="sim-status-text">⏳ Simulation in progress — this may take a minute…</span>
+        </div>
+        <script>
+            (function () {
+                var jobId = {{ sim_job | tojson }};
+                var banner = document.getElementById('sim-banner');
+                var statusText = document.getElementById('sim-status-text');
+                function poll() {
+                    fetch('/simulate/status/' + jobId)
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.status === 'running') {
+                                setTimeout(poll, 3000);
+                            } else if (data.status === 'done') {
+                                banner.className = 'message success sim-banner';
+                                statusText.textContent = '✓ ' + data.message;
+                            } else {
+                                banner.className = 'message error sim-banner';
+                                statusText.textContent = '✗ ' + data.message;
+                            }
+                        })
+                        .catch(function () { setTimeout(poll, 5000); });
+                }
+                poll();
+            })();
+        </script>
+        {% endif %}
+
+        <section class="grid two-columns">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2>Register Meter</h2>
+                        <p>Add a new meter to the meter registration service.</p>
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ url_for('meters_create') }}" class="form-row">
+                    <input type="text" name="name" placeholder="Enter meter name" required>
+                    <button type="submit">Register</button>
+                </form>
+            </div>
+
+            <div class="card info-card">
+                <h2>Valid Date Range</h2>
+                <p>
+                    The dataset only contains readings between
+                    <strong>2007-01-01</strong> and <strong>2007-06-30</strong>.
+                    Date fields are restricted to this range.
+                </p>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <h2>Registered Meters</h2>
+                    <p>Manage meters and trigger simulations for the available dataset window.</p>
+                </div>
+            </div>
+
+            {% if meters %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Meter Name</th>
+                            <th>Created At</th>
+                            <th>Rename</th>
+                            <th>Simulation Range</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for meter in meters %}
+                        <tr>
+                            <td><span class="badge">#{{ meter.meter_id }}</span></td>
+                            <td class="strong">{{ meter.name }}</td>
+                            <td>{{ meter.created_at }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('meters_update') }}" class="inline-form">
+                                    <input type="hidden" name="meter_id" value="{{ meter.meter_id }}">
+                                    <input type="text" name="name" placeholder="New name" required>
+                                    <button type="submit" class="secondary">Rename</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('simulate') }}" class="inline-form date-form">
+                                    <input type="hidden" name="meter_id" value="{{ meter.meter_id }}">
+                                    <input type="date" name="start_date" min="2007-01-01" max="2007-06-30">
+                                    <input type="date" name="end_date" min="2007-01-01" max="2007-06-30">
+                                    <button type="submit">Simulate</button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('meters_delete') }}">
+                                    <input type="hidden" name="meter_id" value="{{ meter.meter_id }}">
+                                    <button type="submit" class="danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="muted empty-state">No meters registered yet.</p>
+            {% endif %}
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <h2>View Readings</h2>
+                    <p>Filter readings by meter and date range.</p>
+                </div>
+            </div>
+
+            <form method="GET" action="{{ url_for('index') }}" class="filter-form">
+                <div>
+                    <label for="meter_id">Meter ID</label>
+                    <input id="meter_id" type="number" name="meter_id" value="{{ selected_meter_id }}" placeholder="e.g. 1">
+                </div>
+                <div>
+                    <label for="start_date">Start Date</label>
+                    <input id="start_date" type="date" name="start_date" value="{{ start_date }}" min="2007-01-01" max="2007-06-30">
+                </div>
+                <div>
+                    <label for="end_date">End Date</label>
+                    <input id="end_date" type="date" name="end_date" value="{{ end_date }}" min="2007-01-01" max="2007-06-30">
+                </div>
+                <div class="filter-action">
+                    <button type="submit">Load Readings</button>
+                </div>
+            </form>
+
+            {% if readings %}
+            <div class="section-subtitle">
+                Showing {{ readings|length }} reading(s)
+            </div>
+            <div class="table-wrap readings-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Reading ID</th>
+                            <th>Meter ID</th>
+                            <th>Timestamp</th>
+                            <th>Global Active Power</th>
+                            <th>Voltage</th>
+                            <th>Sub 1</th>
+                            <th>Sub 2</th>
+                            <th>Sub 3</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reading in readings %}
+                        <tr>
+                            <td><span class="badge">#{{ reading.reading_id }}</span></td>
+                            <td>{{ reading.meter_id }}</td>
+                            <td>{{ reading.timestamp }}</td>
+                            <td>{{ reading.global_active_power }}</td>
+                            <td>{{ reading.voltage }}</td>
+                            <td>{{ reading.sub_metering_1 }}</td>
+                            <td>{{ reading.sub_metering_2 }}</td>
+                            <td>{{ reading.sub_metering_3 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="muted empty-state">No readings to display. Choose a meter/date range and click Load Readings.</p>
+            {% endif %}
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <h2>Analytics</h2>
+                    <p>Run analysis over the selected meter and date range.</p>
+                </div>
+            </div>
+
+            <form method="GET" action="{{ url_for('index') }}" class="filter-form">
+                <div>
+                    <label for="analysis_meter_id">Meter ID</label>
+                    <input id="analysis_meter_id" type="number" name="meter_id" required value="{{ selected_meter_id }}" placeholder="e.g. 1">
+                </div>
+                <div>
+                    <label for="analysis_start_date">Start Date</label>
+                    <input id="analysis_start_date" type="date" name="start_date" required value="{{ start_date }}" min="2007-01-01" max="2007-06-30">
+                </div>
+                <div>
+                    <label for="analysis_end_date">End Date</label>
+                    <input id="analysis_end_date" type="date" name="end_date" required value="{{ end_date }}" min="2007-01-01" max="2007-06-30">
+                </div>
+                <div>
+                    <label for="analysis_type">Analysis Type</label>
+                    <select id="analysis_type" name="analysis_type" required>
+                        <option value="">Select</option>
+                        <option value="averages" {% if analysis_type=='averages' %}selected{% endif %}>Daily Averages</option>
+                        <option value="peaks" {% if analysis_type=='peaks' %}selected{% endif %}>Peak Hour</option>
+                        <option value="categories" {% if analysis_type=='categories' %}selected{% endif %}>Categories</option>
+                    </select>
+                </div>
+                <div class="filter-action">
+                    <button type="submit">Run Analysis</button>
+                </div>
+            </form>
+
+            {% if averages %}
+            <div class="result-box">
+                <h3>Daily Averages</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Average Power</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in averages %}
+                            <tr>
+                                <td>{{ row.date }}</td>
+                                <td>{{ row.avg_power }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if peaks %}
+            <div class="result-box">
+                <h3>Peak Hour</h3>
+                <div class="simple-stats">
+                    <div class="stat">
+                        <span class="stat-label">Peak Hour</span>
+                        <span class="stat-value">{{ peaks.peak_hour }}</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Average Power</span>
+                        <span class="stat-value">{{ peaks.avg_power }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if categories %}
+            <div class="result-box">
+                <h3>Category Breakdown</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Kitchen</th>
+                                <th>Laundry</th>
+                                <th>Water Heater / AC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>{{ categories.kitchen }}</td>
+                                <td>{{ categories.laundry }}</td>
+                                <td>{{ categories.water_heater_ac }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+</body>
+
+</html>
