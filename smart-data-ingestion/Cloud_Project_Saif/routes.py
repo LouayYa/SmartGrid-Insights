@@ -1,5 +1,5 @@
 import os
-from datetime import date, datetime
+from datetime import date
 from typing import List, Optional
 
 import numpy as np
@@ -14,6 +14,7 @@ from schemas import (
     ConsumptionResponse,
     ConsumptionUpdate,
     LoadResponse,
+    parse_date_string,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["consumption"])
@@ -39,25 +40,14 @@ NUMERIC_COLUMNS = [
 ]
 EXPECTED_COLUMNS = ["Date", "Time", *NUMERIC_COLUMNS]
 
-# Supported date formats in the VARCHAR Date column.
-# Dataset contains both "1/1/07" (d/m/yy) and "30/6/2007" (d/m/yyyy).
-DATE_FORMATS = ("%d/%m/%Y", "%d/%m/%y")
-
-
 def parse_flexible_date(value: str) -> date:
-    """Parse a date string using any of the supported formats.
+    """Parse a date string in ISO, d/m/yyyy, or d/m/yy format.
 
     Raises ValueError if none of the formats match.
     """
     if value is None:
         raise ValueError("date value is None")
-    s = str(value).strip()
-    for fmt in DATE_FORMATS:
-        try:
-            return datetime.strptime(s, fmt).date()
-        except ValueError:
-            continue
-    raise ValueError(f"Unrecognized date format: {value!r}")
+    return parse_date_string(value)
 
 
 @router.post(
@@ -72,7 +62,8 @@ def load_dataset(
     """Bulk-load the household power consumption CSV into the database.
 
     Idempotent: clears existing rows before inserting. Missing values ("?")
-    become NULL. Dates are stored verbatim as VARCHAR (no format coercion).
+    become NULL. The CSV's mixed d/m/yy and d/m/yyyy date strings are parsed
+    into real DATE values so range queries can filter in SQL.
     """
     # Try the given path, then CWD-relative, then app-dir-relative as fallbacks.
     candidates = [csv_path]
@@ -111,8 +102,15 @@ def load_dataset(
         for col in NUMERIC_COLUMNS:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        # Dates/Times stored verbatim as strings.
-        df["Date"] = df["Date"].astype(str)
+        # Parse mixed-format date strings into real dates; fail fast with a
+        # clear error rather than storing junk.
+        try:
+            df["Date"] = df["Date"].astype(str).map(parse_flexible_date)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"CSV contains an unparseable date: {exc}",
+            )
         df["Time"] = df["Time"].astype(str)
 
         # Replace NaN with None for SQLAlchemy (NULL in DB).
@@ -158,10 +156,9 @@ def list_consumption(
 ):
     """List consumption records, optionally filtered by a date range.
 
-    Without date filters, pagination is applied at the SQL level. When
-    both start_date and end_date are provided, all records are fetched
-    and filtered in Python because Date is stored as VARCHAR in mixed
-    formats (acceptable for a ~260k-row PoC).
+    Filtering and pagination both run at the SQL level: Date is a real,
+    indexed DATE column, so the range filter is a WHERE ... BETWEEN that
+    uses the index instead of scanning all rows in Python.
     """
     if (start_date is None) != (end_date is None):
         raise HTTPException(
@@ -169,49 +166,35 @@ def list_consumption(
             detail="start_date and end_date must be provided together.",
         )
 
-    if start_date is None and end_date is None:
-        rows = (
-            db.query(HouseholdPowerConsumption)
-            .order_by(HouseholdPowerConsumption.ID)
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
-        return rows
+    query = db.query(HouseholdPowerConsumption)
 
-    # Both date bounds provided — parse and filter in Python.
-    try:
-        start = parse_flexible_date(start_date)
-        end = parse_flexible_date(end_date)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid date format: {exc}",
-        )
+    if start_date is not None and end_date is not None:
+        try:
+            start = parse_flexible_date(start_date)
+            end = parse_flexible_date(end_date)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid date format: {exc}",
+            )
 
-    if start > end:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start_date must be on or before end_date.",
+        if start > end:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="start_date must be on or before end_date.",
+            )
+
+        query = query.filter(
+            HouseholdPowerConsumption.Date >= start,
+            HouseholdPowerConsumption.Date <= end,
         )
 
-    all_rows = (
-        db.query(HouseholdPowerConsumption)
-        .order_by(HouseholdPowerConsumption.ID)
+    return (
+        query.order_by(HouseholdPowerConsumption.ID)
+        .offset(offset)
+        .limit(limit)
         .all()
     )
-
-    filtered = []
-    for row in all_rows:
-        try:
-            row_date = parse_flexible_date(row.Date)
-        except ValueError:
-            # Skip rows whose Date column can't be parsed rather than failing the request.
-            continue
-        if start <= row_date <= end:
-            filtered.append(row)
-
-    return filtered[offset : offset + limit]
 
 
 @router.get("/consumption/{record_id}", response_model=ConsumptionResponse)

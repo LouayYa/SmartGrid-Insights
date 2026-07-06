@@ -86,7 +86,7 @@ The service ships with a `pytest` suite in [`tests/`](tests/) covering:
 Tests run against an isolated, disposable **SQLite** database (`tests/conftest.py` overrides `DATABASE_URL` before the app is imported), not the real PostgreSQL instance — so they're fast, deterministic, and require no external services or credentials to run.
 
 ```bash
-pip install pytest httpx
+pip install pytest pytest-cov httpx
 pytest tests/ -v
 ```
 

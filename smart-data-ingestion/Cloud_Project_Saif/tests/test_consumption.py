@@ -63,8 +63,22 @@ def test_list_consumption_filters_by_date_range(client):
     )
 
     assert response.status_code == 200
+    # Dates are stored as real DATEs and serialized as ISO.
     dates = [row["Date"] for row in response.json()]
-    assert dates == ["1/1/07", "15/1/07"]
+    assert dates == ["2007-01-01", "2007-01-15"]
+
+
+def test_list_consumption_accepts_iso_date_params(client):
+    client.post(f"{API_PREFIX}/consumption", json=make_payload(date="1/1/07"))
+    client.post(f"{API_PREFIX}/consumption", json=make_payload(date="1/2/07"))
+
+    response = client.get(
+        f"{API_PREFIX}/consumption",
+        params={"start_date": "2007-01-01", "end_date": "2007-01-31"},
+    )
+
+    assert response.status_code == 200
+    assert [row["Date"] for row in response.json()] == ["2007-01-01"]
 
 
 def test_list_consumption_requires_both_date_bounds(client):

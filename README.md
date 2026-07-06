@@ -121,7 +121,7 @@ sequenceDiagram
 
 ## CI/CD
 
-Every push to `main` triggers **GitHub Actions** in each service repo: dependencies install and the service's pytest suite runs, blocking the pipeline on failure. The deploy-to-Azure jobs (originally wired through Azure Deployment Center) are kept as reference implementations but only run on a manual `workflow_dispatch` trigger, since the Azure hosting was decommissioned.
+Every push to `main` triggers **GitHub Actions** in each service repo: dependencies install and the service's pytest suite runs with a **coverage gate** (configured per-service in `pyproject.toml`, ≥80%), blocking the pipeline on failure. Database schemas are versioned with **Alembic migrations** — each stateful service runs `alembic upgrade head` on startup instead of `create_all()`. The deploy-to-Azure jobs (originally wired through Azure Deployment Center) are kept as reference implementations but only run on a manual `workflow_dispatch` trigger, since the Azure hosting was decommissioned.
 
 | Service | Workflow Status |
 |---------|----------------|

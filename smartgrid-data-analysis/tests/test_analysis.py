@@ -91,3 +91,51 @@ def test_missing_query_params_returns_422(client):
     response = client.get("/analysis/averages/1")
 
     assert response.status_code == 422
+
+
+def test_collection_unreachable_returns_502(client, monkeypatch):
+    import requests as requests_lib
+
+    def fake_get(url, params=None, timeout=None):
+        raise requests_lib.ConnectionError("down")
+
+    monkeypatch.setattr("app.main.requests.get", fake_get)
+
+    response = client.get(
+        "/analysis/averages/1",
+        params={"start_date": "2007-01-01", "end_date": "2007-01-02"},
+    )
+
+    assert response.status_code == 502
+
+
+def test_fetch_paginates_until_short_page(client, monkeypatch):
+    """Analyses must see every page of readings, not just the first."""
+    monkeypatch.setattr("app.main.PAGE_SIZE", 2)
+
+    pages = {0: SAMPLE_READINGS[:2], 2: SAMPLE_READINGS[2:]}
+    requested_offsets = []
+
+    class FakeResponse:
+        def __init__(self, data):
+            self.status_code = 200
+            self._data = data
+
+        def json(self):
+            return self._data
+
+    def fake_get(url, params=None, timeout=None):
+        requested_offsets.append(params["offset"])
+        return FakeResponse(pages.get(params["offset"], []))
+
+    monkeypatch.setattr("app.main.requests.get", fake_get)
+
+    response = client.get(
+        "/analysis/categories/1",
+        params={"start_date": "2007-01-01", "end_date": "2007-01-02"},
+    )
+
+    assert response.status_code == 200
+    # All three readings (across two pages) were aggregated.
+    assert response.json() == {"kitchen": 3.0, "laundry": 3.0, "water_heater_ac": 6.0}
+    assert requested_offsets == [0, 2]

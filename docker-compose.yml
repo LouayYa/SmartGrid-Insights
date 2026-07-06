@@ -68,6 +68,8 @@ services:
   # --------------------------------------------------- meter registration (8000)
   meter:
     build: ./smartgrid-meter-registration/meter-registration-service
+    # Apply Alembic migrations before serving.
+    command: ["sh", "-c", "alembic upgrade head && gunicorn app:app --bind 0.0.0.0:8000 --workers 2"]
     environment:
       DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/smartgrid_registration"
     ports:
@@ -82,6 +84,8 @@ services:
   # ------------------------------------------------------- data ingestion (8001)
   ingestion:
     build: ./smart-data-ingestion/Cloud_Project_Saif
+    # Apply Alembic migrations (incl. the VARCHAR->DATE conversion) before serving.
+    command: ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8001 --workers 2"]
     environment:
       DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/smartgrid_ingestion"
     ports:
@@ -96,6 +100,8 @@ services:
   # ------------------------------------------------------ data collection (8002)
   collection:
     build: ./smartgrid-data-collection
+    # Apply Alembic migrations before serving.
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8002 --workers 2"]
     environment:
       DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/smartgrid_collection"
       DATA_INGESTION_URL: "http://ingestion:8001"
@@ -127,6 +133,10 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      # The API's entrypoint runs the Alembic migrations; start after it so
+      # the schema exists (restart policy covers any race regardless).
+      collection:
+        condition: service_started
     restart: unless-stopped
     networks:
       - smartgrid

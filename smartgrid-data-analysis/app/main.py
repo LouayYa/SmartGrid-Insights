@@ -1,34 +1,68 @@
+import logging
 import os
+import time
 from collections import defaultdict
 from datetime import datetime
 from typing import List
 
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 
 from app.schemas import DailyAverage, PeakHourResponse, CategoryBreakdown
 
 load_dotenv()
 
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("analysis")
+
 app = FastAPI(title="Data Analysis Service", version="1.0.0")
 
 DATA_COLLECTION_URL = os.getenv("DATA_COLLECTION_URL", "http://localhost:8002")
 
+# The collection service paginates GET /readings; page through it so
+# analyses always see the full date range.
+PAGE_SIZE = 50000
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s -> %d (%.1f ms)",
+        request.method, request.url.path, response.status_code, elapsed_ms,
+    )
+    return response
+
 
 def fetch_readings(meter_id: int, start_date: str, end_date: str) -> list:
-    params = {
-        "meter_id": meter_id,
-        "start_date": start_date,
-        "end_date": end_date,
-    }
-    try:
-        resp = requests.get(f"{DATA_COLLECTION_URL}/readings", params=params, timeout=30)
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Data Collection Service unreachable: {exc}")
-    if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="Failed to fetch readings from Data Collection Service")
-    readings = resp.json()
+    readings = []
+    offset = 0
+    while True:
+        params = {
+            "meter_id": meter_id,
+            "start_date": start_date,
+            "end_date": end_date,
+            "limit": PAGE_SIZE,
+            "offset": offset,
+        }
+        try:
+            resp = requests.get(f"{DATA_COLLECTION_URL}/readings", params=params, timeout=30)
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=502, detail=f"Data Collection Service unreachable: {exc}")
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Failed to fetch readings from Data Collection Service")
+        page = resp.json()
+        readings.extend(page)
+        if len(page) < PAGE_SIZE:
+            break
+        offset += PAGE_SIZE
+
     if not readings:
         raise HTTPException(status_code=404, detail="No readings found for the given meter and date range")
     return readings

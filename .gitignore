@@ -22,3 +22,8 @@ instance/
 .vscode/
 .idea/
 *.log
+
+# Coverage artifacts
+.coverage
+**/.coverage
+htmlcov/

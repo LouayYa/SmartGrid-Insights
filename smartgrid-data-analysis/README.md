@@ -79,7 +79,7 @@ The service ships with a `pytest` suite in [`tests/`](tests/) covering:
 Tests mock the outbound `requests.get` call to the Data Collection Service (`tests/conftest.py`), so they're fast, deterministic, and require no external services or credentials to run.
 
 ```bash
-pip install pytest httpx
+pip install pytest pytest-cov httpx
 pytest tests/ -v
 ```
 

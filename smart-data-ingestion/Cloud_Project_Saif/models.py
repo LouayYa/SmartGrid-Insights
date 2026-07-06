@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, Integer, String
+from sqlalchemy import Column, Date, Float, Integer, String
 
 from database import Base
 
@@ -13,7 +13,9 @@ class HouseholdPowerConsumption(Base):
     __tablename__ = "household_power_consumption"
 
     ID = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    Date = Column(String(20), nullable=False)
+    # Real DATE (indexed) so range filters run in SQL; the CSV's mixed
+    # d/m/yy / d/m/yyyy strings are parsed at load time.
+    Date = Column(Date, nullable=False, index=True)
     Time = Column(String(20), nullable=False)
     Global_active_power = Column(Float, nullable=True)
     Global_reactive_power = Column(Float, nullable=True)

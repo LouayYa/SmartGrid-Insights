@@ -21,5 +21,7 @@ class Settings:
     APP_NAME: str = "Data Ingestion Service"
     APP_VERSION: str = "0.1.0"
 
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
 
 settings = Settings()
