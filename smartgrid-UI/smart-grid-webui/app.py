@@ -203,14 +203,15 @@ def simulate():
 
     def run():
         try:
-            trigger_simulation(
+            result = trigger_simulation(
                 int(meter_id),
                 start_date=start_date or None,
                 end_date=end_date or None,
             )
+            published = result.get("records_published", "")
             _jobs[job_id] = {
                 "status": "done",
-                "message": "Simulation completed successfully.",
+                "message": f"Simulation published {published} readings to Kafka — they will appear as the consumer stores them.",
                 "finished_at": time.time(),
             }
         except Exception as e:
