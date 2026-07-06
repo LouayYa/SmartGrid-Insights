@@ -3,9 +3,15 @@
 > CMP404 Spring 2026 · Team 5 · American University of Sharjah  
 > Saifeldin Hassan · Louy Abbas · Ahmad Bilal
 
-A cloud-based platform for analyzing household electricity consumption patterns, built as five independently deployed microservices. Administrators can register smart meters, simulate data collection from a historical dataset, and run consumption analytics — all from a single web interface.
+An event-driven platform for analyzing household electricity consumption, built as five independently deployed **Python microservices** (FastAPI + Flask). Smart-meter readings stream through a **Kafka** topic into **PostgreSQL** (schemas versioned with **Alembic**), an **Airflow** batch pipeline maintains precomputed daily analytics served back over the API, and the whole system runs on **Docker Compose** or **Kubernetes** with one command. Every service ships a **pytest suite behind a CI coverage gate (≥80%)**, request logging, and optional API-key auth.
 
-Originally deployed on **Azure App Service** with **Azure SQL** databases (since decommissioned to cut hosting costs); the database layer has been migrated to **PostgreSQL**, every service is **dockerized**, and the readings write path is **event-driven through Kafka** — so the whole stack now runs anywhere with one `docker compose up`.
+```
+simulator / API ──► Kafka (meter-readings) ──► consumer ──► PostgreSQL ──► on-demand analytics API
+                                                                │
+                                                     Airflow @daily aggregates ──► precomputed analytics API
+```
+
+**History:** originally deployed on **Azure App Service** with **Azure SQL** (decommissioned to cut hosting costs — the CI deploy jobs remain as reference). The platform was then migrated to PostgreSQL and containerized, and has since grown the Kafka write path, Airflow batch layer, Kubernetes manifests, and test/migration discipline documented below.
 
 ---
 
@@ -182,7 +188,9 @@ COLLECTION_SERVICE_URL=http://localhost:8002
 ANALYSIS_SERVICE_URL=http://localhost:8003
 ```
 
-Default ports: Meter Registration `8000` · Data Ingestion `8001` · Data Collection `8002` · Data Analysis `8003` · Client UI `8004`
+Default ports: Meter Registration `8000` · Data Ingestion `8001` · Data Collection `8002` · Data Analysis `8003` · Client UI `8004` · Airflow `8080`
+
+**Auth:** when `SMARTGRID_API_KEY` is set (see `.env.example`), every backend endpoint except `/health` and the docs requires that value in the `X-API-Key` header — the UI, inter-service calls, the simulator, and the Airflow DAGs all forward it automatically. Leave it empty to disable auth for local development.
 
 ---
 

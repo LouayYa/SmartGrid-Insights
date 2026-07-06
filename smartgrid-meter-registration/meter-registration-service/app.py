@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Load .env before importing Config
 load_dotenv()
 
-from flask import Flask, g, request
+from flask import Flask, g, jsonify, request
 from config import Config
 from models import db
 from routes import meter_bp
@@ -17,6 +17,10 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("meter-registration")
+
+# When set, every endpoint except /health requires this value in the
+# X-API-Key header. Unset (default) disables auth — local dev and tests.
+API_KEY = os.getenv("SMARTGRID_API_KEY", "")
 
 
 def create_app():
@@ -29,6 +33,12 @@ def create_app():
     @app.before_request
     def start_timer():
         g.request_start = time.perf_counter()
+
+    @app.before_request
+    def require_api_key():
+        if API_KEY and request.path != "/health":
+            if request.headers.get("X-API-Key") != API_KEY:
+                return jsonify({"error": "invalid or missing API key"}), 401
 
     @app.after_request
     def log_request(response):

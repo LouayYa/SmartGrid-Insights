@@ -138,7 +138,7 @@ def test_precomputed_daily_404_when_dag_has_not_run(client, mock_readings):
 def test_collection_unreachable_returns_502(client, monkeypatch):
     import requests as requests_lib
 
-    def fake_get(url, params=None, timeout=None):
+    def fake_get(url, params=None, headers=None, timeout=None):
         raise requests_lib.ConnectionError("down")
 
     monkeypatch.setattr("app.main.requests.get", fake_get)
@@ -166,7 +166,7 @@ def test_fetch_paginates_until_short_page(client, monkeypatch):
         def json(self):
             return self._data
 
-    def fake_get(url, params=None, timeout=None):
+    def fake_get(url, params=None, headers=None, timeout=None):
         requested_offsets.append(params["offset"])
         return FakeResponse(pages.get(params["offset"], []))
 

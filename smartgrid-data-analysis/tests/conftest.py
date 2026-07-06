@@ -25,7 +25,7 @@ def mock_readings(monkeypatch):
     the Data Collection Service over the network."""
 
     def _apply(status_code=200, json_data=None):
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, headers=None, timeout=None):
             return FakeResponse(status_code=status_code, json_data=json_data)
 
         monkeypatch.setattr("app.main.requests.get", fake_get)

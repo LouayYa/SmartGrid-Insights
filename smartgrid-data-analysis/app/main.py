@@ -8,10 +8,17 @@ from typing import List
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 from app.schemas import CategoryBreakdown, DailyAggregate, DailyAverage, PeakHourResponse
 
 load_dotenv()
+
+# When set, every endpoint except the open paths requires this value in the
+# X-API-Key header. Unset (default) disables auth — local dev and tests.
+# The same key is forwarded on calls to the Data Collection Service.
+API_KEY = os.getenv("SMARTGRID_API_KEY", "")
+OPEN_PATHS = {"/", "/health", "/docs", "/openapi.json"}
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -26,6 +33,14 @@ DATA_COLLECTION_URL = os.getenv("DATA_COLLECTION_URL", "http://localhost:8002")
 # The collection service paginates GET /readings; page through it so
 # analyses always see the full date range.
 PAGE_SIZE = 50000
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    if API_KEY and request.url.path not in OPEN_PATHS:
+        if request.headers.get("X-API-Key") != API_KEY:
+            return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -57,7 +72,12 @@ def fetch_readings(meter_id: int, start_date: str, end_date: str) -> list:
             "offset": offset,
         }
         try:
-            resp = requests.get(f"{DATA_COLLECTION_URL}/readings", params=params, timeout=30)
+            resp = requests.get(
+                f"{DATA_COLLECTION_URL}/readings",
+                params=params,
+                headers={"X-API-Key": API_KEY},
+                timeout=30,
+            )
         except requests.RequestException as exc:
             raise HTTPException(status_code=502, detail=f"Data Collection Service unreachable: {exc}")
         if resp.status_code != 200:
@@ -127,7 +147,12 @@ def get_precomputed_daily(
     """
     params = {"meter_id": meter_id, "start_date": start_date, "end_date": end_date}
     try:
-        resp = requests.get(f"{DATA_COLLECTION_URL}/aggregates/daily", params=params, timeout=30)
+        resp = requests.get(
+            f"{DATA_COLLECTION_URL}/aggregates/daily",
+            params=params,
+            headers={"X-API-Key": API_KEY},
+            timeout=30,
+        )
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"Data Collection Service unreachable: {exc}")
     if resp.status_code != 200:

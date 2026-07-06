@@ -13,10 +13,11 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 INGESTION_URL = os.getenv("INGESTION_API_URL", "http://ingestion:8001")
+HEADERS = {"X-API-Key": os.getenv("SMARTGRID_API_KEY", "")}
 
 
 def load_dataset():
-    resp = requests.post(f"{INGESTION_URL}/api/v1/load", timeout=600)
+    resp = requests.post(f"{INGESTION_URL}/api/v1/load", headers=HEADERS, timeout=600)
     resp.raise_for_status()
     body = resp.json()
     if body.get("records_loaded", 0) <= 0:
@@ -29,6 +30,7 @@ def verify_dataset():
     resp = requests.get(
         f"{INGESTION_URL}/api/v1/consumption",
         params={"limit": 1},
+        headers=HEADERS,
         timeout=60,
     )
     resp.raise_for_status()

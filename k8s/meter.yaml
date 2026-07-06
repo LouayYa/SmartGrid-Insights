@@ -38,6 +38,11 @@ spec:
                   key: POSTGRES_PASSWORD
             - name: DATABASE_URL
               value: "postgresql://postgres:$(POSTGRES_PASSWORD)@db:5432/smartgrid_registration"
+            - name: SMARTGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: smartgrid-secrets
+                  key: SMARTGRID_API_KEY
           readinessProbe:
             httpGet:
               path: /health

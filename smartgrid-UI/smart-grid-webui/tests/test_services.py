@@ -24,8 +24,8 @@ def http(monkeypatch):
     calls = {}
 
     def record(method):
-        def _do(url, json=None, params=None, timeout=None):
-            calls.update(method=method, url=url, json=json, params=params)
+        def _do(url, json=None, params=None, headers=None, timeout=None):
+            calls.update(method=method, url=url, json=json, params=params, headers=headers)
             return FakeResponse(calls.get("response", {"ok": True}))
         return _do
 
@@ -94,3 +94,13 @@ def test_analysis_wrappers_hit_expected_endpoints(http):
     services.get_categories(1, "2007-01-01", "2007-01-02")
     assert http["url"].endswith("/analysis/categories/1")
     assert http["params"] == {"start_date": "2007-01-01", "end_date": "2007-01-02"}
+
+
+def test_all_calls_send_api_key_header(http, monkeypatch):
+    monkeypatch.setattr(services, "HEADERS", {"X-API-Key": "sekrit"})
+
+    services.list_meters()
+    assert http["headers"] == {"X-API-Key": "sekrit"}
+
+    services.trigger_simulation(1)
+    assert http["headers"] == {"X-API-Key": "sekrit"}

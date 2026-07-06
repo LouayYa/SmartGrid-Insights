@@ -35,6 +35,11 @@ spec:
                 configMapKeyRef:
                   name: smartgrid-config
                   key: DATA_COLLECTION_URL
+            - name: SMARTGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: smartgrid-secrets
+                  key: SMARTGRID_API_KEY
           readinessProbe:
             httpGet:
               path: /health

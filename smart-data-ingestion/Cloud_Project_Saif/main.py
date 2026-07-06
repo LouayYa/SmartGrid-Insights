@@ -1,13 +1,20 @@
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from config import settings
 from database import Base, engine
 from routes import router
+
+# When set, every endpoint except the open paths requires this value in the
+# X-API-Key header. Unset (default) disables auth — local dev and tests.
+API_KEY = os.getenv("SMARTGRID_API_KEY", "")
+OPEN_PATHS = {"/", "/health", "/docs", "/openapi.json"}
 
 logging.basicConfig(
     level=settings.LOG_LEVEL,
@@ -26,6 +33,14 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    if API_KEY and request.url.path not in OPEN_PATHS:
+        if request.headers.get("X-API-Key") != API_KEY:
+            return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
+    return await call_next(request)
 
 
 @app.middleware("http")
