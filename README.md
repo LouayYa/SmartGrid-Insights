@@ -3,7 +3,9 @@
 > CMP404 Spring 2026 · Team 5 · American University of Sharjah  
 > Saifeldin Hassan · Louy Abbas · Ahmad Bilal
 
-A cloud-based platform for analyzing household electricity consumption patterns, built as five independently deployed microservices on **Azure App Service** with **Azure SQL** databases. Administrators can register smart meters, simulate data collection from a historical dataset, and run consumption analytics — all from a single web interface.
+A cloud-based platform for analyzing household electricity consumption patterns, built as five independently deployed microservices. Administrators can register smart meters, simulate data collection from a historical dataset, and run consumption analytics — all from a single web interface.
+
+Originally deployed on **Azure App Service** with **Azure SQL** databases (since decommissioned to cut hosting costs); the database layer has been migrated to **PostgreSQL** and every service is **dockerized**, so the whole stack now runs anywhere with one `docker compose up`.
 
 ---
 
@@ -11,9 +13,9 @@ A cloud-based platform for analyzing household electricity consumption patterns,
 
 | # | Service | Owner | Stack | Repo |
 |---|---------|-------|-------|------|
-| 1 | **Data Ingestion** | Saif | FastAPI · SQLAlchemy · Azure SQL | [smartgrid-data-ingestion](https://github.com/LouayYa/smartgrid-data-ingestion) |
-| 2 | **Meter Registration** | Ahmad | Flask · SQLAlchemy · Azure SQL | [meter-registration-service](https://github.com/LouayYa/meter-registration-service) |
-| 3 | **Data Collection** | Louy | FastAPI · SQLAlchemy · Azure SQL | [smartgrid-data-collection](https://github.com/LouayYa/smartgrid-data-collection) |
+| 1 | **Data Ingestion** | Saif | FastAPI · SQLAlchemy · PostgreSQL | [smartgrid-data-ingestion](https://github.com/LouayYa/smartgrid-data-ingestion) |
+| 2 | **Meter Registration** | Ahmad | Flask · SQLAlchemy · PostgreSQL | [meter-registration-service](https://github.com/LouayYa/meter-registration-service) |
+| 3 | **Data Collection** | Louy | FastAPI · SQLAlchemy · PostgreSQL | [smartgrid-data-collection](https://github.com/LouayYa/smartgrid-data-collection) |
 | 4 | **Data Analysis** | Louy | FastAPI · Requests | [smartgrid-data-analysis](https://github.com/LouayYa/smartgrid-data-analysis) |
 | 5 | **Client Interface** | Ahmad | Flask · Jinja2 | [smartgrid-ui](https://github.com/LouayYa/smartgrid-ui) |
 
@@ -53,9 +55,9 @@ The database password is injected everywhere from the `POSTGRES_PASSWORD` variab
 
 ---
 
-## System Architecture
+## System Architecture (original Azure deployment)
 
-Five microservices and three databases on Azure PaaS. The Client UI is the only public-facing service — all backend services and databases are VNet-private.
+The diagrams below document the original Azure PaaS deployment: five microservices and three databases, with the Client UI as the only public-facing service — all backend services and databases VNet-private. The same topology now runs locally on the compose network (`smartgrid`), with the three Azure SQL databases replaced by per-service databases on a shared Postgres instance.
 
 <p align="center">
   <img src="./diagrams/system-architecture.svg" width="90%" />
@@ -63,9 +65,9 @@ Five microservices and three databases on Azure PaaS. The Client UI is the only 
 
 ---
 
-## Network Topology
+## Network Topology (original Azure deployment)
 
-The VNet (`smartgrid-vnet`, `10.0.0.0/16`) is split into an app-subnet for App Service VNet integration and a db-private-subnet for private endpoints to each Azure SQL database. Only the Client UI has a public inbound endpoint.
+The VNet (`smartgrid-vnet`, `10.0.0.0/16`) was split into an app-subnet for App Service VNet integration and a db-private-subnet for private endpoints to each Azure SQL database. Only the Client UI had a public inbound endpoint.
 
 <p align="center">
   <img src="./diagrams/Network-Topology.svg" width="90%" />
@@ -81,7 +83,7 @@ The VNet (`smartgrid-vnet`, `10.0.0.0/16`) is split into an app-subnet for App S
 
 1. **Register a meter** — Client UI → `POST /meters` → Meter Registration Service → Meter Registration DB
 2. **Trigger simulation** — Client UI → `POST /simulate/{meter_id}` → Data Collection Service
-3. **Simulate readings** — Data Collection Service spawns the Python Simulator, which calls `GET /consumption` on the Data Ingestion Service and `POST /readings` back to Data Collection Service
+3. **Simulate readings** — Data Collection Service fetches the historical window via `GET /consumption` on the Data Ingestion Service and replays it as readings (a standalone simulator client in `smartgrid-data-collection/simulator/` can do the same from outside via `POST /readings/bulk`)
 4. **Store readings** — Data Collection Service persists each reading (tagged with `meter_id`) to the Data Collection DB
 5. **Analyze** — Client UI → Data Analysis Service (`/analysis/averages`, `/analysis/peaks`, `/analysis/categories`) → queries Data Collection DB → returns computed results
 
@@ -99,7 +101,7 @@ The VNet (`smartgrid-vnet`, `10.0.0.0/16`) is split into an app-subnet for App S
 
 ## CI/CD
 
-Every service deploys automatically to Azure App Service via **GitHub Actions**, configured through Azure Deployment Center. A push to `main` triggers build → deploy.
+Every push to `main` triggers **GitHub Actions** in each service repo: dependencies install and the service's pytest suite runs, blocking the pipeline on failure. The deploy-to-Azure jobs (originally wired through Azure Deployment Center) are kept as reference implementations but only run on a manual `workflow_dispatch` trigger, since the Azure hosting was decommissioned.
 
 | Service | Workflow Status |
 |---------|----------------|
